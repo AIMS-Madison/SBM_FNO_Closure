@@ -1,6 +1,6 @@
 import numpy as np
+import pyfftw
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -43,8 +43,9 @@ def sampler(vorticity_condition,
            batch_size,
            num_steps,
            time_noises,
-           device):
-    t = torch.ones(batch_size, device=device) * 0.1
+           device,
+            sparse=True):
+    t = torch.ones(batch_size, device=device) * time_noises[0]
     init_x = torch.randn(batch_size, spatial_dim, spatial_dim, device=device) * marginal_prob_std(t)[:, None, None]
     x = init_x
 
@@ -53,7 +54,10 @@ def sampler(vorticity_condition,
             batch_time_step = torch.ones(batch_size, device=device) * time_noises[i]
             step_size = time_noises[i] - time_noises[i + 1]
             g = diffusion_coeff(batch_time_step)
-            grad = score_model(batch_time_step, x, vorticity_condition, sparse_data)
+            if sparse:
+                grad = score_model(batch_time_step, x, vorticity_condition, sparse_data)
+            else:
+                grad = score_model(batch_time_step, x, vorticity_condition)
             mean_x = x + (g ** 2)[:, None, None] * grad * step_size
             x = mean_x + torch.sqrt(step_size) * g[:, None, None] * torch.randn_like(x)
 
@@ -63,9 +67,9 @@ def sampler(vorticity_condition,
 ################################
 ####### Energy Spectrum ########
 ################################
-def moving_average(data, window_size):
-    """ Simple moving average """
-    return np.convolve(data, np.ones(window_size), 'valid') / window_size
+def moving_average(interval, window_size):
+    window = np.ones(int(window_size))/float(window_size)
+    return np.convolve(interval, window, 'same')
 
 def energy_spectrum(phi, lx=1, ly=1, smooth=True):
     # Assuming phi is of shape (time_steps, nx, ny)
@@ -78,13 +82,12 @@ def energy_spectrum(phi, lx=1, ly=1, smooth=True):
 
     k0x = 2.0 * np.pi / lx
     k0y = 2.0 * np.pi / ly
-    knorm = (k0x + k0y) / 3.0
+    knorm = (k0x + k0y) / 2.0
 
     kxmax = nx // 2
     kymax = ny // 2
 
     wave_numbers = knorm * np.arange(0, nx)
-
     energy_spectrum = np.zeros(len(wave_numbers))
 
     for kx in range(nx):
@@ -99,14 +102,122 @@ def energy_spectrum(phi, lx=1, ly=1, smooth=True):
     energy_spectrum /= knorm
 
     if smooth:
-        smoothed_spectrum = moving_average(energy_spectrum, 5)  # Smooth the spectrum
-        smoothed_spectrum = np.append(smoothed_spectrum, np.zeros(4))  # Append zeros to match original length after convolution
+        smoothed_spectrum = moving_average(energy_spectrum, 3)  # Smooth the spectrum
+        # smoothed_spectrum = np.append(smoothed_spectrum, np.zeros(4))  # Append zeros to match original length after convolution
         smoothed_spectrum[:4] = np.sum(energy_h[:, :4, :4].real, axis=(0, 1, 2)) / (knorm * phi.shape[0])  # First 4 values corrected
         energy_spectrum = smoothed_spectrum
 
     knyquist = knorm * min(nx, ny) / 2
 
     return knyquist, wave_numbers, energy_spectrum
+
+def spectrum_2d(signal, n_observations, normalize=True):
+    """This function computes the spectrum of a 2D signal using the Fast Fourier Transform (FFT).
+
+    Paramaters
+    ----------
+    signal : a tensor of shape (T * n_observations * n_observations)
+        A 2D discretized signal represented as a 1D tensor with shape
+        (T * n_observations * n_observations), where T is the number of time
+        steps and n_observations is the spatial size of the signal.
+
+        T can be any number of channels that we reshape into and
+        n_observations * n_observations is the spatial resolution.
+    n_observations: an integer
+        Number of discretized points. Basically the resolution of the signal.
+
+    Returns
+    --------
+    spectrum: a tensor
+        A 1D tensor of shape (s,) representing the computed spectrum.
+    """
+    T = signal.shape[0]
+    signal = signal.view(T, n_observations, n_observations)
+
+    if normalize:
+        signal = torch.fft.fft2(signal)
+    else:
+        signal = torch.fft.rfft2(
+            signal, s=(n_observations, n_observations), norm="backward"
+        )
+
+    # 2d wavenumbers following PyTorch fft convention
+    k_max = n_observations // 2
+    wavenumers = torch.cat(
+        (
+            torch.arange(start=0, end=k_max, step=1),
+            torch.arange(start=-k_max, end=0, step=1),
+        ),
+        0,
+    ).repeat(n_observations, 1)
+    k_x = wavenumers.transpose(0, 1)
+    k_y = wavenumers
+
+    # Sum wavenumbers
+    sum_k = torch.abs(k_x) + torch.abs(k_y)
+    sum_k = sum_k
+
+    # Remove symmetric components from wavenumbers
+    index = -1.0 * torch.ones((n_observations, n_observations))
+    k_max1 = k_max + 1
+    index[0:k_max1, 0:k_max1] = sum_k[0:k_max1, 0:k_max1]
+
+    spectrum = torch.zeros((T, n_observations))
+    for j in range(1, n_observations + 1):
+        ind = torch.where(index == j)
+        spectrum[:, j - 1] = (signal[:, ind[0], ind[1]].sum(dim=1)).abs() ** 2
+
+    spectrum = spectrum.mean(dim=0)
+
+    k_bins = torch.range(1, n_observations) * 2 * np.pi
+    return k_bins, spectrum
+
+def energy_spectrum_t(nx,ny,w):
+    epsilon = 1.0e-6
+
+    dx = 2.0*np.pi/np.float64(nx)
+    dy = 2.0*np.pi/np.float64(ny)
+
+    kx = np.empty(nx)
+    ky = np.empty(ny)
+
+    kx[0:int(nx/2)] = 2*np.pi/(np.float64(nx)*dx)*np.float64(np.arange(0,int(nx/2)))
+    kx[int(nx/2):nx] = 2*np.pi/(np.float64(nx)*dx)*np.float64(np.arange(-int(nx/2),0))
+
+    ky[0:ny] = kx[0:ny]
+
+    kx[0] = epsilon
+    ky[0] = epsilon
+
+    kx, ky = np.meshgrid(kx, ky, indexing='ij')
+
+    a = pyfftw.empty_aligned((nx,ny),dtype= 'complex128')
+    b = pyfftw.empty_aligned((nx,ny),dtype= 'complex128')
+
+    fft_object = pyfftw.FFTW(a, b, axes = (0,1), direction = 'FFTW_FORWARD')
+    wf = fft_object(w)
+
+    es =  np.empty((nx,ny))
+
+    kk = np.sqrt(kx[:,:]**2 + ky[:,:]**2)
+    es[:,:] = np.pi*((np.abs(wf[:,:])/(nx*ny))**2)/kk
+
+    n = int(np.sqrt(nx*nx + ny*ny)/2.0)-1
+
+    en = np.zeros(n+1)
+
+    for k in range(1,n+1):
+        en[k] = 0.0
+        ic = 0
+        ii,jj = np.where((kk[1:,1:]>(k-0.5)) & (kk[1:,1:]<(k+0.5)))
+        ic = ii.size
+        ii = ii+1
+        jj = jj+1
+        en[k] = np.sum(es[ii,jj])
+        en[k] = en[k]/ic
+    kn = np.linspace(1, n, n) * 2 * np.pi
+    return kn, en[1:]
+
 
 ################################
 ########### Plotting ###########
@@ -187,3 +298,32 @@ def plot_heatmaps_sample(data1, data2, data3, sample_batch_size=4, seed=12):
     # Adjust layout and display the plot
     plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
     plt.show()
+
+
+################################
+########### Metrics ############
+################################
+def mse_err(data1, data2):
+    return torch.mean((data1 - data2) ** 2)
+
+def max_err(data1, data2):
+    error_max = torch.amax(torch.abs(data1 - data2), dim=(1, 2))
+    return torch.mean(error_max / torch.amax(torch.abs(data1), dim=(1, 2)))
+
+def fro_err(data1, data2):
+    error_fro = torch.linalg.matrix_norm(data1 - data2, 'fro', dim=(1, 2))
+    return torch.mean(error_fro / torch.linalg.matrix_norm(data1, 'fro', dim=(1, 2)))
+
+def spectral_err(data1, data2):
+    error_spec = torch.linalg.matrix_norm(data1 - data2, 2, dim=(1, 2))
+    return torch.mean(error_spec / torch.linalg.matrix_norm(data1, 2, dim=(1, 2)))
+
+# Sparse information for interpolation conditioning
+def interpolate2d(data, sparse_res):
+    down_factor = data.shape[-1] // sparse_res
+    data_sparse = data[:, ::down_factor, ::down_factor]
+    interp_res = data.shape[-1] + 1 - down_factor
+    data_sparse_interp = F.interpolate(data_sparse.unsqueeze(1),
+                                       size=(interp_res, interp_res), mode='bicubic')
+    data_sparse_interp = F.pad(data_sparse_interp, (0, down_factor-1, 0, down_factor-1), mode='replicate')
+    return data_sparse_interp.squeeze(1)
