@@ -86,12 +86,12 @@ time_values = [30, 35, 40, 45, 50]
 
 # MSE and RMSE data for simulations
 
-sim_vort_mse_II = [0, 6.0433e-04 ,8.7310e-04, 1.1163e-03, 1.2691e-03]
-sim_vort_rmse_II = [0 ,2.6890e-02 ,3.2715e-02, 3.6923e-02, 3.9265e-02]
-sim_vort_mse_III = [0 ,1.0426e-03 ,1.2796e-03, 1.4099e-03, 1.6015e-03]
-sim_vort_rmse_III = [0, 3.6581e-02, 3.9451e-02, 4.2438e-02, 4.4774e-02]
-sim_vort_mse_IV = [0 ,2.5687e-04 ,4.5996e-04, 4.9764e-04, 6.1615e-04]
-sim_vort_rmse_IV = [0 ,1.7523e-02, 2.3565e-02, 2.4442e-02, 2.7875e-02]
+sim_vort_mse_II = [0, 1.5259e-04, 2.8789e-04, 7.3273e-04, 1.5795e-03]
+sim_vort_rmse_II = [0, 1.3415e-02, 2.2945e-02, 3.0611e-02, 4.3552e-02]
+sim_vort_mse_III = [0, 2.2781e-04, 5.2549e-04, 1.5526e-03, 3.8183e-03]
+sim_vort_rmse_III = [0, 1.6223e-02, 2.4895e-02, 4.3086e-02, 6.9365e-02]
+sim_vort_mse_IV = [0, 1.5088e-04, 2.8789e-04, 4.1774e-04, 7.9800e-04]
+sim_vort_rmse_IV = [0, 1.3356e-02, 1.8562e-02, 2.2601e-02, 3.2098e-02]
 
 
 # Create a figure with a custom gridspec layout
@@ -147,7 +147,7 @@ lege = fig.legend(handles, labels, loc='upper center', ncol=3, fontsize=fs,
 lege.get_frame().set_linewidth(2)
 
 # Save the figure as a PDF ensuring nothing overlaps
-plt.savefig('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\MSE_RE_Comparison_H.pdf', dpi=600)
+plt.savefig('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\MSE_RE_Comparison_G.png', dpi=300)
 plt.show()
 
 

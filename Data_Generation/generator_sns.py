@@ -145,127 +145,131 @@ def navier_stokes_2d(a, w0, f, visc, T, delta_t, record_steps, thres = 30000, st
 
     return sol, sol_t, diffusion, nonlinear
 
-def navier_stokes_2d_model(w0, f, visc, sparse_condition, sampler,
-                           closure = False, delta_t=1e-4, record_steps=1, eval_steps=10):
+
+def navier_stokes_2d_closure(a, w0, f, visc, sparse_condition, sampler,
+                             missing_term='diffusion', closure=False,
+                             delta_t=1e-4, record_steps=1, eval_steps=10):
+    """
+    Unified 2D Navier–Stokes solver with closure.
+
+    Parameters:
+      a               : Tuple/list of domain lengths (used to scale the wavenumbers).
+      w0              : Initial vorticity (tensor; last two dimensions are spatial).
+      f               : Forcing field (tensor).
+      visc            : Viscosity coefficient.
+      sparse_condition: Tensor with conditions for the closure sampler.
+      sampler         : Function that takes (w, condition) and returns a closure field.
+      missing_term    : Choose 'diffusion' or 'nonlinear'.
+      closure         : If True, incorporate the closure via sampler; otherwise use basic update.
+      delta_t         : Time step.
+      record_steps    : Number of time steps to record.
+      eval_steps      : Frequency (in steps) at which to evaluate the sampler.
+
+    Returns:
+      sol             : Recorded physical vorticity (tensor of shape w0.size() + (record_steps,)).
+      sol_t           : 1D tensor with time stamps.
+      execution_time  : Total execution time in seconds.
+    """
+    # Grid size (assumes power-of-2)
     N1, N2 = w0.size()[-2], w0.size()[-1]
-    k_max1 = math.floor(N1 / 2.0)
-    k_max2 = math.floor(N1 / 2.0)
+    k_max = math.floor(N1 / 2.0)
 
-    # Wavenumbers in y-direction
-    k_y = torch.cat((torch.arange(start=0, end=k_max2, step=1, device=w0.device),
-                     torch.arange(start=-k_max2, end=0, step=1, device=w0.device)), 0).repeat(N1, 1).transpose(0, 1)
-    # Wavenumbers in x-direction
-    k_x = torch.cat((torch.arange(start=0, end=k_max1, step=1, device=w0.device),
-                     torch.arange(start=-k_max1, end=0, step=1, device=w0.device)), 0).repeat(N2, 1)
-    # Negative Laplacian in Fourier space
-    lap = 4 * (math.pi ** 2) * (k_x ** 2 + k_y ** 2)
-    lap[0, 0] = 1.0
+    # Transform initial vorticity and forcing to Fourier space
+    w_h = torch.fft.rfft2(w0)
+    f_h = torch.fft.rfft2(f)
+    if len(f_h.size()) < len(w_h.size()):
+        f_h = torch.unsqueeze(f_h, 0)
 
-    # Dealiasing mask
-    dealias = torch.unsqueeze(
-        torch.logical_and(torch.abs(k_y) <= (2.0 / 3.0) * k_max2,
-                          torch.abs(k_x) <= (2.0 / 3.0) * k_max1).float(), 0)
+    # Set up wavenumber arrays in the y-direction then x-direction
+    k_y = torch.cat((torch.arange(start=0, end=k_max, device=w0.device),
+                     torch.arange(start=-k_max, end=0, device=w0.device)), 0).repeat(N1, 1)
+    k_x = k_y.transpose(0, 1)
+    # Truncate redundant modes
+    k_x = k_x[..., :k_max + 1]
+    k_y = k_y[..., :k_max + 1]
 
-    # Initial vorticity to Fourier space
-    w_h = torch.fft.fftn(w0, dim=[1, 2])
-    w_h = torch.stack([w_h.real, w_h.imag], dim=-1)
+    # Physical wavenumbers and negative Laplacian in Fourier space
+    kx_2d = 2.0 * torch.pi * k_x / a[0]
+    ky_2d = 2.0 * torch.pi * k_y / a[1]
+    lap = kx_2d ** 2 + ky_2d ** 2
+    lap[0, 0] = 1.0  # avoid division by zero
 
-    # Forcing to Fourier space
-    if f is not None:
-        f_h = torch.fft.fftn(f, dim=[-2, -1])
-        f_h = torch.stack([f_h.real, f_h.imag], dim=-1)
-        # If same forcing for the whole batch
-        if len(f_h.size()) < len(w_h.size()):
-            f_h = torch.unsqueeze(f_h, 0)
-    else:
-        f_h = torch.zeros_like(w_h)
+    # Dealiasing mask (only needed for the diffusion branch)
+    if missing_term == 'diffusion':
+        dealias = torch.unsqueeze(torch.logical_and(torch.abs(k_y) <= (2.0 / 3.0) * k_max,
+                                                    torch.abs(k_x) <= (2.0 / 3.0) * k_max).float(), 0)
 
+    # Prepare solution storage
     sol = torch.zeros(*w0.size(), record_steps, device=w0.device)
     sol_t = torch.zeros(record_steps, device=w0.device)
-
     t = 0.0
 
+    # Initialize closure sample variable if needed
+    if closure:
+        if missing_term == 'diffusion':
+            diffusion_sample = None
+        elif missing_term == 'nonlinear':
+            nonlinear_sample = None
+
     start_time = time.time()
-    for i in range(record_steps):
-        psi_h = w_h.clone()
-        psi_h[..., 0] = psi_h[..., 0] / lap
-        psi_h[..., 1] = psi_h[..., 1] / lap
+    for i in tqdm(range(record_steps)):
+        if missing_term == 'diffusion':
+            # Compute streamfunction in Fourier space
+            psi_h = w_h / lap
 
-        # Velocity field in x-direction = psi_y
-        q = psi_h.clone()
-        temp = q[..., 0].clone()
-        q[..., 0] = -2 * math.pi * k_y * q[..., 1]
-        q[..., 1] = 2 * math.pi * k_y * temp
-        q = torch.fft.ifftn(torch.view_as_complex(q), dim=[1, 2], s=(N1, N2)).real
+            # Velocity field in x-direction = psi_y
+            q = ky_2d * 1j * psi_h
+            q = torch.fft.irfft2(q, s=(N1, N2))
 
-        # Velocity field in y-direction = -psi_x
-        v = psi_h.clone()
-        temp = v[..., 0].clone()
-        v[..., 0] = 2 * math.pi * k_x * v[..., 1]
-        v[..., 1] = -2 * math.pi * k_x * temp
-        v = torch.fft.ifftn(torch.view_as_complex(v), dim=[1, 2], s=(N1, N2)).real
+            # Velocity field in y-direction = -psi_x
+            v = -kx_2d * 1j * psi_h
+            v = torch.fft.irfft2(v, s=(N1, N2))
 
-        # Partial x of vorticity
-        w_x = w_h.clone()
-        temp = w_x[..., 0].clone()
-        w_x[..., 0] = -2 * math.pi * k_x * w_x[..., 1]
-        w_x[..., 1] = 2 * math.pi * k_x * temp
-        w_x = torch.fft.ifftn(torch.view_as_complex(w_x), dim=[1, 2], s=(N1, N2)).real
+            # Compute spatial derivatives of vorticity
+            w_x = kx_2d * 1j * w_h
+            w_x = torch.fft.irfft2(w_x, s=(N1, N2))
+            w_y = ky_2d * 1j * w_h
+            w_y = torch.fft.irfft2(w_y, s=(N1, N2))
 
-        # Partial y of vorticity
-        w_y = w_h.clone()
-        temp = w_y[..., 0].clone()
-        w_y[..., 0] = -2 * math.pi * k_y * w_y[..., 1]
-        w_y[..., 1] = 2 * math.pi * k_y * temp
-        w_y = torch.fft.ifftn(torch.view_as_complex(w_y), dim=[1, 2], s=(N1, N2)).real
+            # Non-linear term: u·grad(w), computed in physical space then back to Fourier space
+            F_h = torch.fft.rfft2(q * w_x + v * w_y)
+            F_h = dealias * F_h
 
-        F_h = torch.fft.fftn(q * w_x + v * w_y, dim=[1, 2])
-        F_h = torch.stack([F_h.real, F_h.imag], dim=-1)
+            # Get physical vorticity (for the closure sampler)
+            w = torch.fft.irfft2(w_h, s=(N1, N2))
 
-        # Dealias
-        F_h[..., 0] = dealias * F_h[..., 0]
-        F_h[..., 1] = dealias * F_h[..., 1]
-
-        w = torch.fft.ifftn(torch.view_as_complex(w_h), dim=[1, 2], s=(N1, N2)).real
-
-        if closure == True:
-            if i % eval_steps == 0:
-                diffusion_sample = sampler(w, sparse_condition[:, :, :, i])
+            if closure:
+                if i % eval_steps == 0:
+                    diffusion_sample = sampler(w, sparse_condition[:, :, :, i])
+                else:
+                    diffusion_sample = diffusion_sample + torch.randn_like(diffusion_sample) * 0.00005
+                diffusion_h = torch.fft.rfft2(diffusion_sample)
+                w_h = (w_h - delta_t * F_h + delta_t * f_h + 0.5 * delta_t * diffusion_h) / \
+                      (1.0 + 0.5 * delta_t * visc * lap)
             else:
-                diffusion_sample = diffusion_sample + torch.randn_like(diffusion_sample) * 0.00005
+                w_h = (w_h - delta_t * F_h + delta_t * f_h) / (1.0 + 0.5 * delta_t * visc * lap)
 
-            # laplacian term
-            diffusion_h = torch.fft.fftn(diffusion_sample, dim=[1, 2])
-            diffusion_h = torch.stack([diffusion_h.real, diffusion_h.imag], dim=-1)
+        elif missing_term == 'nonlinear':
+            # Obtain physical vorticity field
+            w = torch.fft.irfft2(w_h, s=(N1, N2))
+            if closure:
+                if i % eval_steps == 0:
+                    nonlinear_sample = sampler(w, sparse_condition[:, :, :, i])
+                else:
+                    nonlinear_sample = nonlinear_sample + torch.randn_like(nonlinear_sample) * 0.00005
+                nonlinear_h = torch.fft.rfft2(nonlinear_sample)
+                w_h = (w_h + delta_t * f_h + delta_t * nonlinear_h - 0.5 * delta_t * visc * lap * w_h) / \
+                      (1.0 + 0.5 * delta_t * visc * lap)
+            else:
+                w_h = (w_h + delta_t * f_h - 0.5 * delta_t * visc * lap * w_h) / \
+                      (1.0 + 0.5 * delta_t * visc * lap)
+        else:
+            raise ValueError("Unknown missing term. Please choose 'diffusion' or 'nonlinear'.")
 
-            w_h[..., 0] = ((w_h[..., 0] - delta_t * F_h[..., 0] + delta_t * f_h[..., 0] + 0.5 * delta_t * diffusion_h[..., 0])
-                           / (1.0 + 0.5 * delta_t * visc * lap))
-            w_h[..., 1] = ((w_h[..., 1] - delta_t * F_h[..., 1] + delta_t * f_h[..., 1] + 0.5 * delta_t * diffusion_h[..., 1])
-                           / (1.0 + 0.5 * delta_t * visc * lap))
-
-        if closure == False:
-            closure_term = sparse_condition[:, :, :, i]
-            closure_term_h = torch.fft.fftn(closure_term, dim=[1, 2])
-            closure_term_h = torch.stack([closure_term_h.real, closure_term_h.imag], dim=-1)
-            # w_h[..., 0] = ((w_h[..., 0] - delta_t * F_h[..., 0] + delta_t * f_h[..., 0])
-            #                / (1.0 + 0.5 * delta_t * visc * lap))
-            # w_h[..., 1] = ((w_h[..., 1] - delta_t * F_h[..., 1] + delta_t * f_h[..., 1])
-            #                / (1.0 + 0.5 * delta_t * visc * lap))
-
-            w_h[..., 0] = ((w_h[..., 0]  + delta_t * f_h[..., 0] + delta_t * closure_term_h[..., 0]
-                            - 0.5 * delta_t * visc * lap * w_h[..., 0])
-                           / (1.0 + 0.5 * delta_t * visc * lap))
-            w_h[..., 1] = ((w_h[..., 1]  + delta_t * f_h[..., 1] + delta_t * closure_term_h[..., 1]
-                            - 0.5 * delta_t * visc * lap * w_h[..., 1])
-                           / (1.0 + 0.5 * delta_t * visc * lap))
-
-        sol[..., i] = w
+        # Record the physical space solution and update time
+        sol[..., i] = torch.fft.irfft2(w_h, s=(N1, N2))
         sol_t[i] = t
         t += delta_t
 
-
-
-    end_time = time.time()
-
-    execution_time = end_time - start_time
+    execution_time = time.time() - start_time
     return sol, sol_t, execution_time

@@ -1,5 +1,5 @@
 import sys
-sys.path.append('C:\\UWMadisonResearch\\SBM_FNO_Closure\\DiffusionTerm_Generation')
+sys.path.append('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Training_Sampling')
 import numpy as np
 import seaborn as sns
 import h5py
@@ -86,7 +86,7 @@ time_noises_2 = torch.linspace(sde_time_max, 0, sample_steps, device=device)
 ################################################################
 
 model_nosparse = FNO2d_NoSparse(marginal_prob_std_fn, modes, modes, width).cuda()
-model_nosparse.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\DiffusionTerm_Generation'
+model_nosparse.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Training_Sampling'
                   '\\Trained_Models\\SparseDiffusionModelMidV_3040_nosparse.pth', map_location=device))
 
 
@@ -225,8 +225,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\DiffusionModelWithoutSparse.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\DiffusionModelWithoutSparse.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -236,7 +236,7 @@ plt.savefig(
 ####################### Interpolation Model ####################
 ################################################################
 model_interp = FNO2d(marginal_prob_std_fn, modes, modes, width).cuda()
-model_interp.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\DiffusionTerm_Generation'
+model_interp.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Training_Sampling'
                   '\\Trained_Models\\SparseDiffusionModel_Interp_v2.pth', map_location=device))
 
 sampler = partial(sampler,
@@ -387,8 +387,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\G_test_64_interp.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\G_test_64_interp.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -485,8 +485,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\G_test_interp.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\G_test_interp.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -510,7 +510,7 @@ plt.savefig(
 ######################## Convolution Model #####################
 ################################################################
 model_conv = FNO2d(marginal_prob_std_fn, modes, modes, width).cuda()
-model_conv.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\DiffusionTerm_Generation'
+model_conv.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Training_Sampling'
                   '\\Trained_Models\\SparseDiffusionModel_Conv_v2.pth', map_location=device))
 
 sampler = partial(sampler,
@@ -665,8 +665,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\G_test_64_conv.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\G_test_64_conv.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -769,8 +769,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\G_test_conv.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\G_test_conv.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -847,7 +847,7 @@ plt.subplots_adjust(top=0.85)
 plt.tight_layout(rect=[0, 0, 1, 0.88])
 plt.savefig(
     'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\TKECompare_G_temp.png',
-    dpi=600,
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -961,7 +961,7 @@ lege.get_frame().set_linewidth(2)
 plt.subplots_adjust(top=0.9)
 plt.tight_layout(rect=[0, 0, 1, 0.92])
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\TKEGeneration.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\TKEGeneration.png',
+    dpi=300,
     bbox_inches='tight'
 )

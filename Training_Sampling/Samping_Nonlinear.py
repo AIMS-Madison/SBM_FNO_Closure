@@ -1,13 +1,11 @@
 import sys
-sys.path.append('C:\\UWMadisonResearch\\SBM_FNO_Closure\\DiffusionTerm_Generation')
+sys.path.append('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Training_Sampling')
 import numpy as np
 import seaborn as sns
 import h5py
 import torch
 import matplotlib.pyplot as plt
 import matplotlib as mpl
-mpl.use("Qt5Agg")
-plt.rcParams["agg.path.chunksize"] = 10000
 plt.rc("text", usetex=True)
 mpl.rcParams['text.usetex'] = True
 plt.rcParams["font.family"] = "Times New Roman"
@@ -16,8 +14,9 @@ plt.rcParams["text.latex.preamble"] = r"\usepackage{amsmath}"
 from functools import partial
 import warnings
 warnings.filterwarnings("ignore")
+
 from utility import (set_seed, energy_spectrum,
-                     get_sigmas_karras, sampler, plot_heatmaps_sample,
+                     get_sigmas_karras, sampler,
                      mse_err, max_err, fro_err, spectral_err)
 from Model_Designs import (marginal_prob_std, diffusion_coeff,FNO2d, FNO2d_NoSparse)
 
@@ -85,7 +84,7 @@ time_noises = get_sigmas_karras(sample_steps, sde_time_min, sde_time_max, device
 ################################################################
 
 model_nosparse = FNO2d_NoSparse(marginal_prob_std_fn, modes, modes, width).cuda()
-model_nosparse.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\DiffusionTerm_Generation'
+model_nosparse.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Training_Sampling'
                   '\\Trained_Models\\SparseNonlinearModel_NoSparse.pth', map_location=device))
 
 
@@ -221,8 +220,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\nonlinearModelWithoutSparse.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\nonlinearModelWithoutSparse.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -232,7 +231,7 @@ plt.savefig(
 ####################### Interpolation Model ####################
 ################################################################
 model_interp = FNO2d(marginal_prob_std_fn, modes, modes, width).cuda()
-model_interp.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\DiffusionTerm_Generation'
+model_interp.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Training_Sampling'
                   '\\Trained_Models\\SparseNonlinearModel_Interp.pth', map_location=device))
 
 sampler = partial(sampler,
@@ -382,8 +381,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\H_test_64_interp.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\H_test_64_interp.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -480,8 +479,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\H_test_interp.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\H_test_interp.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -505,7 +504,7 @@ plt.savefig(
 ######################## Convolution Model #####################
 ################################################################
 model_conv = FNO2d(marginal_prob_std_fn, modes, modes, width).cuda()
-model_conv.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\DiffusionTerm_Generation'
+model_conv.load_state_dict(torch.load('C:\\UWMadisonResearch\\SBM_FNO_Closure\\Training_Sampling'
                   '\\Trained_Models\\SparseNonlinearModel_Conv.pth', map_location=device))
 
 sampler = partial(sampler,
@@ -659,8 +658,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\H_test_64_conv.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\H_test_64_conv.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -763,8 +762,8 @@ for ax in axs.flat:
 # Adjust layout and save the plot
 plt.subplots_adjust(right=0.85, hspace=0.3, wspace=0.5)
 plt.savefig(
-    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\H_test_conv.pdf',
-    dpi=600,
+    'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\H_test_conv.png',
+    dpi=300,
     bbox_inches='tight'
 )
 
@@ -848,6 +847,6 @@ plt.subplots_adjust(top=0.85)
 plt.tight_layout(rect=[0, 0, 1, 0.88])
 plt.savefig(
     'C:\\UWMadisonResearch\\SBM_FNO_Closure\\Plots\\TKECompare_H_temp.png',
-    dpi=600,
+    dpi=300,
     bbox_inches='tight'
 )

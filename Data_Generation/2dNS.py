@@ -6,7 +6,7 @@ import numpy as np
 import math
 import h5py
 from timeit import default_timer
-from Data_Generation.generator_sns import navier_stokes_2d, navier_stokes_2d_model
+from Data_Generation.generator_sns import navier_stokes_2d, navier_stokes_2d_closure
 from Data_Generation.random_forcing import GaussianRF
 
 filename = "./Data_Generation/"
