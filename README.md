@@ -1,7 +1,7 @@
 
 # Data-Driven Stochastic Closure Modeling via Conditional Diffusion Model and Neural Operator
 
-This repo contains the official implementation for the paper [Data-Driven Stochastic Closure Modeling via Conditional Diffusion Model and Neural Operator](https://arxiv.org/abs/2408.02965#:~:text=Data%2DDriven%20Stochastic%20Closure%20Modeling%20via%20Conditional%20Diffusion%20Model%20and%20Neural%20Operator,-Xinghao%20Dong%2C%20Chuanqi&text=Closure%20models%20are%20widely%20used,scales%20is%20often%20too%20expensive.)
+This repo contains the official implementation for the paper [Data-Driven Stochastic Closure Modeling via Conditional Diffusion Model and Neural Operator](https://www.sciencedirect.com/science/article/pii/S0021999125002888?casa_token=zNIDEGUOV1oAAAAA:s_9VgksmArtnTri2Z0y9mLVRhjiw0iA97t101PxJ0W9bKotxcsJSJjUaykHPRoFawFyU7O-QvQ).
 
 by [Xinghao Dong](https://xdong99.github.io/), [Chuanqi Chen](https://github.com/ChuanqiChenCC), and [Jin-Long Wu](https://www.jinlongwu.org/).
 
@@ -25,10 +25,13 @@ continuous spatiotemporal fields.
 
 ## Citations
 ```
-@article{dong2024data,
-  title={Data-Driven Stochastic Closure Modeling via Conditional Diffusion Model and Neural Operator},
+@article{dong2025data,
+  title={Data-driven stochastic closure modeling via conditional diffusion model and neural operator},
   author={Dong, Xinghao and Chen, Chuanqi and Wu, Jin-Long},
-  journal={arXiv preprint arXiv:2408.02965},
-  year={2024}
+  journal={Journal of Computational Physics},
+  pages={114005},
+  year={2025},
+  publisher={Elsevier}
 }
+
 ```
